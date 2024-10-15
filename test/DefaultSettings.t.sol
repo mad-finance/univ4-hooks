@@ -2,7 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {DefaultSettings} from "../src/DefaultSettings.sol";
+import {DefaultHook} from "../src/DefaultHook.sol";
+import {DefaultSettings} from "../src/utils/DefaultSettings.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
@@ -10,36 +11,38 @@ import {Currency} from "v4-core/src/types/Currency.sol";
 import {MockERC721} from "./mocks/MockERC721.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {Fixtures} from "./utils/Fixtures.sol";
+import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 
-contract DefaultSettingsTest is Test, Fixtures {
+contract DefaultHookTest is Test, Fixtures {
+    DefaultHook public defaultHook;
     DefaultSettings public defaultSettings;
     MockERC721 public bonsaiNFT;
     address public constant USER = address(0x2);
 
     function setUp() public {
-        // Deploy the pool manager and other necessary contracts
         deployFreshManagerAndRouters();
-
-        // Deploy the Bonsai NFT
         bonsaiNFT = new MockERC721("Bonsai NFT", "BNFT");
 
-        // Deploy the hook to an address with the correct flags
+        // Deploy DefaultSettings
+        defaultSettings = new DefaultSettings(address(bonsaiNFT));
+
+        // Deploy DefaultHook
         address hookAddress = address(uint160(Hooks.BEFORE_SWAP_FLAG | (0x4444 << 144)));
-        bytes memory constructorArgs = abi.encode(address(manager), address(bonsaiNFT));
-        deployCodeTo("DefaultSettings.sol:DefaultSettings", constructorArgs, hookAddress);
-        defaultSettings = DefaultSettings(hookAddress);
+        bytes memory constructorArgs = abi.encode(address(manager), address(defaultSettings));
+        deployCodeTo("DefaultHook.sol:DefaultHook", constructorArgs, hookAddress);
+        defaultHook = DefaultHook(hookAddress);
     }
 
     function testBeforeSwap_NoNFTs() public {
         PoolKey memory key;
         IPoolManager.SwapParams memory params;
 
-        (bytes4 selector, BeforeSwapDelta delta, uint24 fee) = defaultSettings.beforeSwap(USER, key, params, "");
+        (bytes4 selector, BeforeSwapDelta delta, uint24 fee) = defaultHook.beforeSwap(USER, key, params, "");
 
-        assertEq(selector, DefaultSettings.beforeSwap.selector);
+        assertEq(selector, DefaultHook.beforeSwap.selector);
         assertEq(BeforeSwapDeltaLibrary.getSpecifiedDelta(delta), 0);
         assertEq(BeforeSwapDeltaLibrary.getUnspecifiedDelta(delta), 0);
-        assertEq(fee, 18000); // 1.8%
+        assertEq(fee, 15000 | LPFeeLibrary.OVERRIDE_FEE_FLAG); // 1.5% with override flag
     }
 
     function testBeforeSwap_OneNFT() public {
@@ -48,30 +51,15 @@ contract DefaultSettingsTest is Test, Fixtures {
         PoolKey memory key;
         IPoolManager.SwapParams memory params;
 
-        (bytes4 selector, BeforeSwapDelta delta, uint24 fee) = defaultSettings.beforeSwap(USER, key, params, "");
+        (bytes4 selector, BeforeSwapDelta delta, uint24 fee) = defaultHook.beforeSwap(USER, key, params, "");
 
-        assertEq(selector, DefaultSettings.beforeSwap.selector);
+        assertEq(selector, DefaultHook.beforeSwap.selector);
         assertEq(BeforeSwapDeltaLibrary.getSpecifiedDelta(delta), 0);
         assertEq(BeforeSwapDeltaLibrary.getUnspecifiedDelta(delta), 0);
-        assertEq(fee, 12000); // 1.2%
+        assertEq(fee, 0 | LPFeeLibrary.OVERRIDE_FEE_FLAG); // 0% with override flag
     }
 
-    function testBeforeSwap_TwoNFTs() public {
-        bonsaiNFT.mint(USER, 1);
-        bonsaiNFT.mint(USER, 2);
-
-        PoolKey memory key;
-        IPoolManager.SwapParams memory params;
-
-        (bytes4 selector, BeforeSwapDelta delta, uint24 fee) = defaultSettings.beforeSwap(USER, key, params, "");
-
-        assertEq(selector, DefaultSettings.beforeSwap.selector);
-        assertEq(BeforeSwapDeltaLibrary.getSpecifiedDelta(delta), 0);
-        assertEq(BeforeSwapDeltaLibrary.getUnspecifiedDelta(delta), 0);
-        assertEq(fee, 6000); // 0.6%
-    }
-
-    function testBeforeSwap_ThreeOrMoreNFTs() public {
+    function testBeforeSwap_MultipleNFTs() public {
         bonsaiNFT.mint(USER, 1);
         bonsaiNFT.mint(USER, 2);
         bonsaiNFT.mint(USER, 3);
@@ -79,11 +67,11 @@ contract DefaultSettingsTest is Test, Fixtures {
         PoolKey memory key;
         IPoolManager.SwapParams memory params;
 
-        (bytes4 selector, BeforeSwapDelta delta, uint24 fee) = defaultSettings.beforeSwap(USER, key, params, "");
+        (bytes4 selector, BeforeSwapDelta delta, uint24 fee) = defaultHook.beforeSwap(USER, key, params, "");
 
-        assertEq(selector, DefaultSettings.beforeSwap.selector);
+        assertEq(selector, DefaultHook.beforeSwap.selector);
         assertEq(BeforeSwapDeltaLibrary.getSpecifiedDelta(delta), 0);
         assertEq(BeforeSwapDeltaLibrary.getUnspecifiedDelta(delta), 0);
-        assertEq(fee, 2500); // 0.25%
+        assertEq(fee, 0 | LPFeeLibrary.OVERRIDE_FEE_FLAG); // 0% with override flag
     }
 }

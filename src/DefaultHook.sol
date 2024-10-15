@@ -10,15 +10,15 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
 
-import {IERC721} from "./interfaces/IERC721.sol";
+import {DefaultSettings} from "./utils/DefaultSettings.sol";
 
 /**
- * @title DefaultSettings
+ * @title DefaultHook
  * @author @c0rv0s
  * @notice This hook is applied to all liquidity pools that are created from the Bonsai trading app. Effects include:
  * 1. calculating a swap fee based on how many bonsai NFTs you hold
  */
-contract DefaultSettings is BaseHook {
+contract DefaultHook is BaseHook {
     using PoolIdLibrary for PoolKey;
 
     // NOTE: ---------------------------------------------------------
@@ -26,10 +26,10 @@ contract DefaultSettings is BaseHook {
     // a single hook contract should be able to service multiple pools
     // ---------------------------------------------------------------
 
-    IERC721 immutable bonsaiNFT;
+    DefaultSettings immutable defaultSettings;
 
-    constructor(IPoolManager _poolManager, address _bonsaiNFT) BaseHook(_poolManager) {
-        bonsaiNFT = IERC721(_bonsaiNFT);
+    constructor(IPoolManager _poolManager, address _defaultSettings) BaseHook(_poolManager) {
+        defaultSettings = DefaultSettings(_defaultSettings);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -60,20 +60,8 @@ contract DefaultSettings is BaseHook {
         override
         returns (bytes4, BeforeSwapDelta, uint24)
     {
-        // Get the balance of Bonsai NFTs in the user's wallet
-        uint256 nftBalance = bonsaiNFT.balanceOf(sender);
-
-        // Calculate the protocol fee percentage
-        uint24 protocolFeePercentage;
-        if (nftBalance == 0) {
-            protocolFeePercentage = 18000; // 1.8% (in hundredths of a bip)
-        } else if (nftBalance == 1) {
-            protocolFeePercentage = 12000; // 1.2% (in hundredths of a bip)
-        } else if (nftBalance == 2) {
-            protocolFeePercentage = 6000; // 0.6% (in hundredths of a bip)
-        } else {
-            protocolFeePercentage = 2500; // 0.25% (in hundredths of a bip)
-        }
+        // override swap fee using the DefaultSettings library
+        uint24 protocolFeePercentage = defaultSettings.beforeSwapFeeOverride(sender);
 
         // The protocol fee will be applied as part of the LP fees in the PoolManager
         return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, protocolFeePercentage);
