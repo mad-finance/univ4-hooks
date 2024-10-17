@@ -8,9 +8,19 @@ Hooks to use with Uniswap V4
 
 ### DefaultSettings
 
+Base Sepolia deployment: 0x44848340f8E663FB569568dfA4cFd345fBeAa38A
+
 This is the hook that will be applied to all pools created from the cashtags protocol with the following effects:
 
 1. It sets a dynamic swap fee based on how many Bonsai NFTs you hold.
+
+
+### DefaultHook
+
+Base Sepolia deployment: 0xA788031C591B6824c032a0EFe74837EE5eaeC080
+
+Wraps the default settings into a uniswap v4 hook
+
 
 # v4-template
 
