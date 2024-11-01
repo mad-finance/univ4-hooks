@@ -1,8 +1,6 @@
-# Uni v4 Hooks
+# Bonsai Launchpad Uni v4 Hooks
 
-Hooks to use with Uniswap V4
-
-`script/Anvil.s.sol` is commented out since it requires `--via-ir` to compile.
+Hooks to use with Uniswap V4 and the Bonsai Launchpad.
 
 ## Contracts
 
@@ -10,10 +8,9 @@ Hooks to use with Uniswap V4
 
 Base Sepolia deployment: 0x44848340f8E663FB569568dfA4cFd345fBeAa38A
 
-This is the hook that will be applied to all pools created from the cashtags protocol with the following effects:
+This is the hook that will be applied to all pools created from the launchpad with the following effect(s):
 
 1. It sets a dynamic swap fee based on how many Bonsai NFTs you hold.
-
 
 ### DefaultHook
 
@@ -21,6 +18,39 @@ Base Sepolia deployment: 0xA788031C591B6824c032a0EFe74837EE5eaeC080
 
 Wraps the default settings into a uniswap v4 hook
 
+## Make your hook eligible
+
+You can create your own hook and submit it to be whitelisted for the launchpad. In order to be eligible it must be open source, verified on the zkSync explorer and it must include a call to the Default Settings contract for fee adjustment based on Bonsai NFT ownership.
+
+1. In order to make the fee adjustment the `beforeSwap` flag must be enabled on your contract:
+
+```solidity
+   function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
+      return Hooks.Permissions({
+         ...
+         beforeSwap: true,
+         ...
+      });
+   }
+```
+
+2. Next make a call to the `DefaultSettings` contract deployment with the `sender` param as the argument in your `beforeSwap` function to get the appropriate return value for the fee param:
+
+```solidity
+   function beforeSwap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
+      external
+      override
+      returns (bytes4, BeforeSwapDelta, uint24)
+   {
+      // override swap fee by making a call to the DefaultSettings contract
+      uint24 protocolFeePercentage = defaultSettings.beforeSwapFeeOverride(sender);
+
+      // The protocol fee will be applied as part of the LP fees in the PoolManager
+      return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, protocolFeePercentage);
+   }
+```
+
+See the full example in `DefaultHook.sol`.
 
 # v4-template
 

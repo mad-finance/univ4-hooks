@@ -60,7 +60,7 @@ contract DefaultHook is BaseHook {
         override
         returns (bytes4, BeforeSwapDelta, uint24)
     {
-        // override swap fee using the DefaultSettings library
+        // override swap fee by making a call to the DefaultSettings contract
         uint24 protocolFeePercentage = defaultSettings.beforeSwapFeeOverride(sender);
 
         // The protocol fee will be applied as part of the LP fees in the PoolManager
